@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fresh Supply Chain Health Check</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .gradient-bar {
+      background: linear-gradient(to right, #4ade80, #fcd34d, #f87171);
+    }
+    .expand-row {
+      display: none;
+    }
+    .expand-row.active {
+      display: table-row;
+    }
+    .chevron {
+      transition: transform 0.2s;
+    }
+    .chevron.active {
+      transform: rotate(90deg);
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-50 p-6">
+  
+  <!-- Header -->
+  <div class="mb-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-semibold text-slate-800">Fresh Supply Chain Health Check</h1>
+        <p class="text-slate-500 text-sm mt-1">Portfolio Diagnostic · Q4 2024 · 127 Stores</p>
+      </div>
+      <div class="flex items-center gap-4 text-xs">
+        <div class="flex items-center gap-1.5">
+          <div class="w-2.5 h-2.5 rounded-full bg-green-500"></div>
+          <span class="text-slate-500">Q1 Best</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <div class="w-2.5 h-2.5 rounded-full bg-red-500"></div>
+          <span class="text-slate-500">Q5 Needs Focus</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Output Metrics Summary -->
+  <div class="mb-6">
+    <div class="text-xs text-slate-400 uppercase tracking-wide mb-2 font-medium">Output Metrics — Portfolio Level</div>
+    <div class="grid grid-cols-3 gap-4">
+      
+      <!-- In-Stock Rate -->
+      <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+        <div class="flex items-start justify-between mb-3">
+          <div class="text-sm text-slate-500">In-Stock Rate</div>
+          <span class="text-amber-600 text-xs font-medium">⚠ 2.3 gap</span>
+        </div>
+        <div class="text-3xl font-semibold text-slate-800 mb-2">93.7%</div>
+        <div class="flex items-center gap-1.5 text-xs">
+          <span class="w-12 text-right font-medium text-green-600">97.8%</span>
+          <div class="flex-1 h-1.5 gradient-bar rounded-full opacity-70"></div>
+          <span class="w-12 font-medium text-red-500">87.2%</span>
+        </div>
+      </div>
+      
+      <!-- Shrink Rate -->
+      <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+        <div class="flex items-start justify-between mb-3">
+          <div class="text-sm text-slate-500">Shrink Rate</div>
+          <span class="text-amber-600 text-xs font-medium">⚠ 2.9 gap</span>
+        </div>
+        <div class="text-3xl font-semibold text-red-600 mb-2">7.9%</div>
+        <div class="flex items-center gap-1.5 text-xs">
+          <span class="w-12 text-right font-medium text-green-600">3.4%</span>
+          <div class="flex-1 h-1.5 gradient-bar rounded-full opacity-70"></div>
+          <span class="w-12 font-medium text-red-500">13.8%</span>
+        </div>
+      </div>
+      
+      <!-- Customer Freshness -->
+      <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+        <div class="flex items-start justify-between mb-3">
+          <div class="text-sm text-slate-500">Customer Freshness</div>
+          <span class="text-amber-600 text-xs font-medium">⚠ 6 gap</span>
+        </div>
+        <div class="text-3xl font-semibold text-slate-800 mb-2">54%</div>
+        <div class="text-xs text-slate-400 mb-2">of shelf life from harvest</div>
+        <div class="flex items-center gap-1.5 text-xs">
+          <span class="w-12 text-right font-medium text-green-600">72%</span>
+          <div class="flex-1 h-1.5 gradient-bar rounded-full opacity-70"></div>
+          <span class="w-12 font-medium text-red-500">38%</span>
+        </div>
+      </div>
+      
+    </div>
+  </div>
+
+  <!-- Supply Chain Health Metrics -->
+  <div class="mb-6">
+    <div class="text-xs text-slate-400 uppercase tracking-wide mb-2 font-medium">Supply Chain Vital Signs — Portfolio Level</div>
+    <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+      <table class="w-full" id="vitalsTable">
+        <thead>
+          <tr class="bg-slate-50 border-b border-slate-100">
+            <th class="text-left text-xs font-medium text-slate-400 uppercase tracking-wide py-3 px-4">Metric</th>
+            <th class="text-center text-xs font-medium text-slate-400 uppercase tracking-wide py-3 px-3 w-20">Mean</th>
+            <th class="text-center text-xs font-medium text-slate-400 uppercase tracking-wide py-3 px-3 w-20">Target</th>
+            <th class="text-center text-xs font-medium text-slate-400 uppercase tracking-wide py-3 px-4 w-48">Q1 → Q5 Range</th>
+            <th class="text-center text-xs font-medium text-slate-400 uppercase tracking-wide py-3 px-3 w-24">Status</th>
+            <th class="text-center text-xs font-medium text-slate-400 uppercase tracking-wide py-3 px-3 w-10"></th>
+          </tr>
+        </thead>
+        <tbody id="vitalsBody">
+          <!-- Rows inserted by JS -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Category Performance -->
+  <div class="mb-6">
+    <div class="text-xs text-slate-400 uppercase tracking-wide mb-2 font-medium">Category Performance — Top 10 by Revenue</div>
+    <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+      <table class="w-full">
+        <thead>
+          <tr class="bg-slate-50 border-b border-slate-100">
+            <th class="text-left text-xs font-medium text-slate-400 uppercase tracking-wide py-3 px-4" rowspan="2">Category</th>
+            <th class="text-center text-xs font-medium text-slate-400 uppercase tracking-wide py-2 px-3 border-l border-slate-200" colspan="2">In-Stock Rate</th>
+            <th class="text-center text-xs font-medium text-slate-400 uppercase tracking-wide py-2 px-3 border-l border-slate-200" colspan="2">Shrink Rate</th>
+            <th class="text-center text-xs font-medium text-slate-400 uppercase tracking-wide py-2 px-3 border-l border-slate-200" colspan="2">Customer Freshness</th>
+          </tr>
+          <tr class="bg-slate-50 border-b border-slate-100">
+            <th class="text-center text-xs text-slate-400 py-1 px-2 border-l border-slate-200">Avg</th>
+            <th class="text-center text-xs text-slate-400 py-1 px-2">Q1–Q5</th>
+            <th class="text-center text-xs text-slate-400 py-1 px-2 border-l border-slate-200">Avg</th>
+            <th class="text-center text-xs text-slate-400 py-1 px-2">Q1–Q5</th>
+            <th class="text-center text-xs text-slate-400 py-1 px-2 border-l border-slate-200">Avg</th>
+            <th class="text-center text-xs text-slate-400 py-1 px-2">Q1–Q5</th>
+          </tr>
+        </thead>
+        <tbody id="categoryBody">
+          <!-- Rows inserted by JS -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Key Findings -->
+  <div class="grid grid-cols-3 gap-4">
+    <div class="bg-gradient-to-br from-red-600 to-red-700 rounded-xl p-5 text-white">
+      <div class="text-red-200 text-xs uppercase tracking-wide mb-2">Critical Finding</div>
+      <div class="font-semibold mb-2">Forecast Accuracy at 68%</div>
+      <p class="text-red-100 text-sm mb-3">
+        Q5 stores at 51% accuracy—driving 2.4x higher shrink than Q1 performers.
+      </p>
+      <div class="text-xs text-red-200">
+        → Demand sensing + promotional calibration
+      </div>
+    </div>
+    
+    <div class="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl p-5 text-white">
+      <div class="text-amber-200 text-xs uppercase tracking-wide mb-2">Attention</div>
+      <div class="font-semibold mb-2">Delivered Shelf Life Variability</div>
+      <p class="text-amber-100 text-sm mb-3">
+        Q5 suppliers delivering at 54% of spec vs 88% for Q1. Berries most affected.
+      </p>
+      <div class="text-xs text-amber-200">
+        → Supplier scorecard + contract guarantees
+      </div>
+    </div>
+    
+    <div class="bg-gradient-to-br from-slate-700 to-slate-800 rounded-xl p-5 text-white">
+      <div class="text-slate-400 text-xs uppercase tracking-wide mb-2">Opportunity</div>
+      <div class="font-semibold mb-2">Close Q5 to Q3 Gap</div>
+      <p class="text-slate-300 text-sm mb-3">
+        Moving bottom quintile to median would reduce shrink by $2.1M annually.
+      </p>
+      <div class="text-xs text-slate-400">
+        → Target 25 stores, 4 categories
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-6 text-center text-xs text-slate-400">
+    Fresh Analytics · Food Waste Lab · Confidential
+  </div>
+
+  <script>
+    // Supply Chain Metrics Data
+    const supplyChainMetrics = [
+      {
+        name: 'On-Time Supplier Delivery',
+        description: 'Orders delivered within scheduled window',
+        mean: 91.2,
+        q1: 97.5,
+        q5: 82.3,
+        unit: '%',
+        target: 95,
+        isGoodWhenHigh: true,
+        diagnosis: 'Late deliveries compress available selling time',
+        prescription: 'Supplier scorecard enforcement; carrier performance review',
+      },
+      {
+        name: 'Forecast Accuracy (1-WMAPE)',
+        description: 'Demand forecast accuracy at SKU/store/day',
+        mean: 68.4,
+        q1: 82.1,
+        q5: 51.2,
+        unit: '%',
+        target: 75,
+        isGoodWhenHigh: true,
+        diagnosis: 'High forecast error drives safety stock and over-ordering',
+        prescription: 'Demand sensing implementation; promotional lift calibration',
+      },
+      {
+        name: 'Supplier Delivered Shelf Life',
+        description: 'Days remaining at DC receipt vs. expected',
+        mean: 72.5,
+        q1: 88.3,
+        q5: 54.1,
+        unit: '% of spec',
+        target: 80,
+        isGoodWhenHigh: true,
+        diagnosis: 'Receiving product with reduced freshness potential',
+        prescription: 'Contract shelf life guarantees; supplier quality audits',
+      },
+      {
+        name: 'DC Dwell Time',
+        description: 'Hours from receipt to store dispatch',
+        mean: 28.4,
+        q1: 12.2,
+        q5: 52.8,
+        unit: ' hrs',
+        target: 24,
+        isGoodWhenHigh: false,
+        diagnosis: 'Excessive DC time consuming freshness budget',
+        prescription: 'Cross-dock expansion; flow-through scheduling',
+      },
+      {
+        name: 'Order Fill Rate',
+        description: 'Store orders fulfilled completely',
+        mean: 94.1,
+        q1: 98.2,
+        q5: 87.6,
+        unit: '%',
+        target: 97,
+        isGoodWhenHigh: true,
+        diagnosis: 'Unfilled orders create out-of-stocks at store',
+        prescription: 'Safety stock recalibration; allocation logic review',
+      },
+      {
+        name: 'Delivery Frequency Adequacy',
+        description: 'Deliveries per week vs. shelf life requirement',
+        mean: 78.3,
+        q1: 95.0,
+        q5: 58.4,
+        unit: '% adequate',
+        target: 85,
+        isGoodWhenHigh: true,
+        diagnosis: 'Insufficient delivery frequency for product shelf life',
+        prescription: 'Route optimization; frequency increase for short-life SKUs',
+      },
+    ];
+
+    // Category Data
+    const categoryData = [
+      { name: 'Berries', instock: 91.2, shrink: 12.4, freshDays: 38, instockQ1: 95.1, instockQ5: 86.3, shrinkQ1: 7.2, shrinkQ5: 18.1, freshQ1: 52, freshQ5: 24 },
+      { name: 'Packaged Salads', instock: 89.4, shrink: 14.2, freshDays: 41, instockQ1: 94.2, instockQ5: 83.1, shrinkQ1: 8.5, shrinkQ5: 21.3, freshQ1: 55, freshQ5: 28 },
+      { name: 'Avocados', instock: 93.1, shrink: 9.8, freshDays: 44, instockQ1: 96.8, instockQ5: 88.2, shrinkQ1: 5.1, shrinkQ5: 15.2, freshQ1: 58, freshQ5: 31 },
+      { name: 'Stone Fruit', instock: 90.5, shrink: 11.2, freshDays: 42, instockQ1: 95.5, instockQ5: 84.8, shrinkQ1: 6.3, shrinkQ5: 17.4, freshQ1: 56, freshQ5: 29 },
+      { name: 'Grapes', instock: 92.8, shrink: 8.5, freshDays: 48, instockQ1: 96.4, instockQ5: 88.1, shrinkQ1: 4.8, shrinkQ5: 13.2, freshQ1: 62, freshQ5: 35 },
+      { name: 'Tomatoes', instock: 94.2, shrink: 7.1, freshDays: 51, instockQ1: 97.1, instockQ5: 90.2, shrinkQ1: 4.2, shrinkQ5: 11.8, freshQ1: 64, freshQ5: 38 },
+      { name: 'Citrus', instock: 95.8, shrink: 4.2, freshDays: 68, instockQ1: 98.2, instockQ5: 92.4, shrinkQ1: 2.1, shrinkQ5: 7.8, freshQ1: 78, freshQ5: 55 },
+      { name: 'Bananas', instock: 96.4, shrink: 5.8, freshDays: 52, instockQ1: 98.5, instockQ5: 93.1, shrinkQ1: 3.2, shrinkQ5: 9.4, freshQ1: 65, freshQ5: 41 },
+      { name: 'Apples', instock: 96.1, shrink: 3.8, freshDays: 72, instockQ1: 98.4, instockQ5: 93.2, shrinkQ1: 1.9, shrinkQ5: 6.5, freshQ1: 82, freshQ5: 61 },
+      { name: 'Potatoes & Onions', instock: 97.2, shrink: 2.4, freshDays: 85, instockQ1: 98.9, instockQ5: 94.8, shrinkQ1: 1.2, shrinkQ5: 4.1, freshQ1: 91, freshQ5: 76 },
+    ];
+
+    // Render Supply Chain Vitals Table
+    function renderVitalsTable() {
+      const tbody = document.getElementById('vitalsBody');
+      tbody.innerHTML = '';
+
+      supplyChainMetrics.forEach((metric, index) => {
+        const isHealthy = metric.isGoodWhenHigh 
+          ? metric.mean >= metric.target 
+          : metric.mean <= metric.target;
+
+        // Main row
+        const mainRow = document.createElement('tr');
+        mainRow.className = 'border-b border-slate-50 hover:bg-slate-50 cursor-pointer transition-colors';
+        mainRow.dataset.index = index;
+        mainRow.innerHTML = `
+          <td class="py-3 px-4">
+            <div class="font-medium text-slate-700 text-sm">${metric.name}</div>
+            <div class="text-xs text-slate-400">${metric.description}</div>
+          </td>
+          <td class="py-3 px-3 text-center">
+            <span class="text-lg font-semibold ${isHealthy ? 'text-slate-800' : 'text-amber-600'}">
+              ${metric.mean}${metric.unit}
+            </span>
+          </td>
+          <td class="py-3 px-3 text-center text-sm text-slate-500">
+            ${metric.target}${metric.unit}
+          </td>
+          <td class="py-3 px-4">
+            <div class="flex items-center gap-1.5 text-xs">
+              <span class="w-12 text-right font-medium ${metric.isGoodWhenHigh ? 'text-green-600' : 'text-red-500'}">
+                ${metric.q1}${metric.unit}
+              </span>
+              <div class="flex-1 h-1.5 gradient-bar rounded-full opacity-70 min-w-[60px]"></div>
+              <span class="w-12 font-medium ${metric.isGoodWhenHigh ? 'text-red-500' : 'text-green-600'}">
+                ${metric.q5}${metric.unit}
+              </span>
+            </div>
+          </td>
+          <td class="py-3 px-3 text-center">
+            ${isHealthy 
+              ? '<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">Healthy</span>'
+              : '<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Attention</span>'
+            }
+          </td>
+          <td class="py-3 px-3 text-center text-slate-400">
+            <span class="chevron" id="chevron-${index}">▶</span>
+          </td>
+        `;
+
+        // Expandable row
+        const expandRow = document.createElement('tr');
+        expandRow.className = 'expand-row bg-amber-50 border-b border-amber-100';
+        expandRow.id = `expand-${index}`;
+        expandRow.innerHTML = `
+          <td colspan="6" class="px-4 py-4">
+            <div class="grid grid-cols-2 gap-6">
+              <div>
+                <div class="text-xs text-slate-500 uppercase tracking-wide mb-1">Diagnosis</div>
+                <div class="text-sm text-slate-700">${metric.diagnosis}</div>
+              </div>
+              <div>
+                <div class="text-xs text-slate-500 uppercase tracking-wide mb-1">Recommended Action</div>
+                <div class="text-sm text-slate-700 font-medium">${metric.prescription}</div>
+              </div>
+            </div>
+          </td>
+        `;
+
+        mainRow.addEventListener('click', () => toggleExpand(index));
+        
+        tbody.appendChild(mainRow);
+        tbody.appendChild(expandRow);
+      });
+    }
+
+    // Toggle expand row
+    function toggleExpand(index) {
+      const expandRow = document.getElementById(`expand-${index}`);
+      const chevron = document.getElementById(`chevron-${index}`);
+      const mainRow = expandRow.previousElementSibling;
+      
+      expandRow.classList.toggle('active');
+      chevron.classList.toggle('active');
+      mainRow.classList.toggle('bg-amber-50');
+    }
+
+    // Render Category Table
+    function renderCategoryTable() {
+      const tbody = document.getElementById('categoryBody');
+      tbody.innerHTML = '';
+
+      categoryData.forEach(cat => {
+        const row = document.createElement('tr');
+        row.className = 'border-b border-slate-50 hover:bg-slate-50';
+        
+        row.innerHTML = `
+          <td class="py-3 px-4">
+            <div class="font-medium text-slate-700">${cat.name}</div>
+          </td>
+          
+          <!-- In-Stock -->
+          <td class="py-3 px-2 text-center border-l border-slate-100">
+            <span class="font-semibold ${cat.instock < 92 ? 'text-amber-600' : 'text-slate-800'}">
+              ${cat.instock}%
+            </span>
+          </td>
+          <td class="py-3 px-2">
+            <div class="flex items-center gap-1 text-xs text-slate-500">
+              <span class="text-green-600">${cat.instockQ1}</span>
+              <div class="w-8 h-1 gradient-bar rounded-full opacity-60"></div>
+              <span class="text-red-500">${cat.instockQ5}</span>
+            </div>
+          </td>
+          
+          <!-- Shrink -->
+          <td class="py-3 px-2 text-center border-l border-slate-100">
+            <span class="font-semibold ${cat.shrink > 10 ? 'text-red-600' : cat.shrink > 6 ? 'text-amber-600' : 'text-slate-800'}">
+              ${cat.shrink}%
+            </span>
+          </td>
+          <td class="py-3 px-2">
+            <div class="flex items-center gap-1 text-xs text-slate-500">
+              <span class="text-green-600">${cat.shrinkQ1}</span>
+              <div class="w-8 h-1 gradient-bar rounded-full opacity-60"></div>
+              <span class="text-red-500">${cat.shrinkQ5}</span>
+            </div>
+          </td>
+          
+          <!-- Freshness -->
+          <td class="py-3 px-2 text-center border-l border-slate-100">
+            <span class="font-semibold ${cat.freshDays < 45 ? 'text-amber-600' : 'text-slate-800'}">
+              ${cat.freshDays}%
+            </span>
+          </td>
+          <td class="py-3 px-2">
+            <div class="flex items-center gap-1 text-xs text-slate-500">
+              <span class="text-green-600">${cat.freshQ1}</span>
+              <div class="w-8 h-1 gradient-bar rounded-full opacity-60"></div>
+              <span class="text-red-500">${cat.freshQ5}</span>
+            </div>
+          </td>
+        `;
+        
+        tbody.appendChild(row);
+      });
+    }
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      renderVitalsTable();
+      renderCategoryTable();
+    });
+  </script>
+
+</body>
+</html>
