@@ -753,7 +753,7 @@ function getEffectiveData(regionName, supplierIdx) {
 const shrinkRatios = { fifo: 0.35, '5050': 0.58, lifo: 0.92 };
 const supShrinkAdj = [0.95, 1.25, 0.80][supplierIdx];
 const shrink = Math.min(20, Math.max(0.8, +(pctBad * shrinkRatios[currentMode] * supShrinkAdj).toFixed(1)));
-  
+  const tightness   = Math.max(0, (storeAvg / daysAtStore));
   const instock     = Math.min(99, Math.max(80, +(sc.instockBase + sup.instockAdj - tightness * 2).toFixed(1)));
 
   // Supply chain leg breakdown for waterfall display
