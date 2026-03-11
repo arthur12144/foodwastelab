@@ -747,13 +747,13 @@ function getEffectiveData(regionName, supplierIdx) {
   const quintiles   = computeQuintiles(avg, spread);
   const pctBad      = computePctBad(avg, spread);
 
-  // Shrink: driven by how much shelf life remains at store arrival,
-  // regional distance sensitivity, and rotation mode
-  const daysAtStore = Math.max(1, TOTAL_SHELF_LIFE - transitAvg - dcAvg);
-  const tightness   = Math.max(0, (storeAvg / daysAtStore)); // how much of store window is used
-  const shrinkRaw   = sup.shrinkBase * sc.shrinkSens * SHRINK_MODE_MULT[currentMode] * (1 + tightness * 0.4);
-  const shrink      = Math.min(28, Math.max(1.2, +shrinkRaw.toFixed(1)));
-
+  // Shrink derived from same normal distribution as pctBad — guarantees logical consistency
+// Under FIFO: customers absorb near-expiry units → shrink is ~35% of pctBad
+// Under LIFO: customers avoid near-expiry units → shrink converges toward or exceeds pctBad
+const shrinkRatios = { fifo: 0.35, '5050': 0.58, lifo: 0.92 };
+const supShrinkAdj = [0.95, 1.25, 0.80][supplierIdx];
+const shrink = Math.min(20, Math.max(0.8, +(pctBad * shrinkRatios[currentMode] * supShrinkAdj).toFixed(1)));
+  
   const instock     = Math.min(99, Math.max(80, +(sc.instockBase + sup.instockAdj - tightness * 2).toFixed(1)));
 
   // Supply chain leg breakdown for waterfall display
