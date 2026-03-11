@@ -553,7 +553,7 @@
     <div class="divider-v"></div>
     <div class="shelf-stat">
       <div class="val" id="fleet-avg" style="color:#7DC44A">—</div>
-      <div class="lbl">Fleet Avg Days Fresh</div>
+      <div class="lbl">Avg Days Fresh</div>
     </div>
   </div>
 </div>
@@ -759,7 +759,7 @@ function renderKPIs() {
 
   document.getElementById('kpi-strip').innerHTML = `
     <div class="kpi-card">
-      <div class="kpi-label">Fleet Avg Days Fresh</div>
+      <div class="kpi-label">Avg Days Fresh</div>
       <div class="kpi-value ${freshClass}">${fleetAvg}d</div>
       <div class="kpi-sub">of 16d total shelf life</div>
       <div class="kpi-delta ${fleetAvg/16*100 >= 50 ? 'up' : 'down'}">${(fleetAvg/16*100).toFixed(0)}% shelf life to customer</div>
