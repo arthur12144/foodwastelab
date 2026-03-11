@@ -751,9 +751,10 @@ function getEffectiveData(regionName, supplierIdx) {
 // Under FIFO: customers absorb near-expiry units → shrink is ~35% of pctBad
 // Under LIFO: customers avoid near-expiry units → shrink converges toward or exceeds pctBad
 const daysAtStore = Math.max(1, TOTAL_SHELF_LIFE - transitAvg - dcAvg);  
-  const shrinkRatios = { fifo: 0.35, '5050': 0.58, lifo: 0.92 };
+ const lifoShrinkPremium = { fifo: 1.0, '5050': 1.6, lifo: 2.8 };
 const supShrinkAdj = [0.95, 1.25, 0.80][supplierIdx];
-const shrink = Math.min(20, Math.max(0.8, +(pctBad * shrinkRatios[currentMode] * supShrinkAdj).toFixed(1)));
+const shrinkBase = normalCDF((0 - avg) / spread) * 100;
+const shrink = Math.min(20, Math.max(0.8, +(shrinkBase * lifoShrinkPremium[currentMode] * supShrinkAdj).toFixed(1)));
   const tightness   = Math.max(0, (storeAvg / daysAtStore));
   const instock     = Math.min(99, Math.max(80, +(sc.instockBase + sup.instockAdj - tightness * 2).toFixed(1)));
 
