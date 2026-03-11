@@ -553,7 +553,7 @@
     <div class="divider-v"></div>
     <div class="shelf-stat">
       <div class="val" id="fleet-avg" style="color:#7DC44A">—</div>
-      <div class="lbl">Avg Days Fresh</div>
+      <div class="lbl">Avg Customer Freshness</div>
     </div>
   </div>
 </div>
@@ -613,6 +613,24 @@
   <div class="panel full-width">
     <div class="panel-header">
       <div>
+        <div class="panel-title">Supply Chain Freshness Waterfall — Days Consumed by Leg</div>
+        <div class="panel-sub">16d harvest shelf life minus transit (CA/AZ → DC) · DC dwell · store days before purchase = customer days fresh at purchase</div>
+      </div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#94A3B8"></div>Transit</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#93C5FD"></div>DC Dwell</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#FCD34D"></div>Store Pre-Purchase</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--green-fresh)"></div>Customer Days Fresh</div>
+      </div>
+    </div>
+    <div class="panel-body" id="waterfall-panel" style="padding:16px 24px;">
+      <!-- JS populated -->
+    </div>
+  </div>
+
+  <div class="panel full-width">
+    <div class="panel-header">
+      <div>
         <div class="panel-title">In-Stock & Shrink Rates by Region</div>
         <div class="panel-sub">Availability and waste performance — strongly influenced by rotation method</div>
       </div>
@@ -637,58 +655,53 @@ const REGIONS = [
 ];
 const SUPPLIERS = ['FreshFarm Co', 'GreenLeaf', 'Valley Fresh'];
 
-// Mode adjustments: FIFO = better shrink, moderate customer freshness
-// LIFO = worse shrink, better customer freshness (fresher product to customer)
-const MODE_ADJUSTMENTS = {
-  fifo:  { freshnessBonus: 0,    shrinkMult: 0.72, instockBonus: 0.02 },
-  '5050': { freshnessBonus: 1.1,  shrinkMult: 1.00, instockBonus: 0.00 },
-  lifo:  { freshnessBonus: 2.4,  shrinkMult: 1.52, instockBonus: -0.02 }
+// ─── SUPPLY CHAIN MODEL ────────────────────────────────────────────────────────
+// All freshness is grounded in: 16d total SL - transit - DC dwell - store days before purchase
+// Origin: CA / AZ packaged salad. Transit = road/rail days to region DC.
+
+const REGION_SC = {
+  // transitAvg, transitSpread, dcInstockBase, shrinkSensitivity
+  'Pacific Coast':  { transit: 1.0, tSpread: 0.5, instockBase: 96.2, shrinkSens: 0.8 },
+  'Northwest':      { transit: 1.5, tSpread: 0.7, instockBase: 95.4, shrinkSens: 0.9 },
+  'Southwest':      { transit: 1.2, tSpread: 0.5, instockBase: 95.8, shrinkSens: 0.8 },
+  'Mountain West':  { transit: 2.0, tSpread: 0.8, instockBase: 94.6, shrinkSens: 1.0 },
+  'Great Plains':   { transit: 2.5, tSpread: 0.9, instockBase: 93.9, shrinkSens: 1.1 },
+  'Midwest':        { transit: 3.0, tSpread: 0.9, instockBase: 94.1, shrinkSens: 1.1 },
+  'Mid-Atlantic':   { transit: 4.0, tSpread: 0.8, instockBase: 93.2, shrinkSens: 1.3 },
+  'Northeast':      { transit: 4.5, tSpread: 0.8, instockBase: 92.8, shrinkSens: 1.4 },
+  'Southeast':      { transit: 4.0, tSpread: 1.0, instockBase: 93.5, shrinkSens: 1.3 },
+  'Gulf Coast':     { transit: 4.2, tSpread: 1.0, instockBase: 93.0, shrinkSens: 1.3 },
 };
 
-// Seed-based pseudo-random for consistent data
-function seededRand(seed) {
-  let s = seed;
-  return function() {
-    s = (s * 16807 + 0) % 2147483647;
-    return (s - 1) / 2147483646;
-  };
-}
+// DC dwell: avg 3d (range 0–5). Spread reflects variability in DC throughput speed.
+const DC_DWELL_AVG = 3.0;
+const DC_DWELL_SPREAD = 1.3; // ±1 std dev covers most of the 0–5 range
 
-// Base freshness data per region (FIFO baseline)
-// Format: [avgDays, spread, pctBad]
-const REGION_BASE = {
-  'Northeast':      { avg: 7.8, spread: 2.8 },
-  'Southeast':      { avg: 6.2, spread: 3.4 },
-  'Midwest':        { avg: 8.3, spread: 2.5 },
-  'Southwest':      { avg: 5.9, spread: 3.6 },
-  'Northwest':      { avg: 9.1, spread: 2.2 },
-  'Mid-Atlantic':   { avg: 8.0, spread: 2.6 },
-  'Mountain West':  { avg: 7.4, spread: 3.0 },
-  'Great Plains':   { avg: 6.8, spread: 2.9 },
-  'Pacific Coast':  { avg: 9.4, spread: 2.0 },
-  'Gulf Coast':     { avg: 5.5, spread: 3.8 }
+// Store days before purchase: how long product sits before a customer buys it.
+// FIFO → oldest unit sold first → that unit has been sitting longer → more store days consumed
+// LIFO → newest unit sold first → less time on shelf before purchase → better customer freshness
+//        but old stock never moves → worse shrink
+const STORE_DAYS = {
+  fifo:   { avg: 2.8, spread: 1.1 },
+  '5050': { avg: 1.8, spread: 1.0 },
+  lifo:   { avg: 1.1, spread: 0.8 },
 };
 
+// Shrink multiplier by rotation mode:
+// FIFO = oldest sells first, clears near-expiry stock → lower shrink
+// LIFO = newest sells first, old stock accumulates → higher shrink
+const SHRINK_MODE_MULT = { fifo: 0.70, '5050': 1.00, lifo: 1.55 };
+
+// Suppliers: dcDwellAdj = days added/removed from DC dwell avg
+//            shrinkBase = baseline shrink % under 50/50 at avg transit region
+//            instockAdj = adjustment to region instock base
 const SUPPLIER_BASE = [
-  { name: 'FreshFarm Co', avgBonus: 0.8,  shrinkBase: 6.2,  instockBase: 94.1 },
-  { name: 'GreenLeaf',    avgBonus: -0.6, shrinkBase: 9.1,  instockBase: 91.8 },
-  { name: 'Valley Fresh', avgBonus: 1.5,  shrinkBase: 4.8,  instockBase: 95.3 }
+  { name: 'FreshFarm Co', dcDwellAdj: -0.3, shrinkBase: 6.8,  instockAdj:  0.4 },
+  { name: 'GreenLeaf',    dcDwellAdj:  0.6, shrinkBase: 9.8,  instockAdj: -1.2 },
+  { name: 'Valley Fresh', dcDwellAdj: -0.6, shrinkBase: 5.2,  instockAdj:  0.9 },
 ];
 
-// Compute quintiles from normal-ish distribution
-function computeQuintiles(avg, spread) {
-  const zScores = [-1.28, -0.52, 0.0, 0.52, 1.28]; // Q1..Q5 midpoints
-  return zScores.map(z => Math.max(0.5, Math.min(16, +(avg + z * spread).toFixed(1))));
-}
-
-// Compute % bad (< 3.2 days) assuming truncated normal
-function computePctBad(avg, spread) {
-  // Approximate: z-score for 3.2 cutoff
-  const z = (CRITICAL_THRESHOLD - avg) / spread;
-  const pct = normalCDF(z) * 100;
-  return Math.max(0.5, Math.min(65, +pct.toFixed(1)));
-}
-
+// ─── MATH HELPERS ──────────────────────────────────────────────────────────────
 function normalCDF(z) {
   const t = 1 / (1 + 0.2316419 * Math.abs(z));
   const d = 0.3989423 * Math.exp(-z * z / 2);
@@ -696,79 +709,124 @@ function normalCDF(z) {
   return z > 0 ? 1 - p : p;
 }
 
+function computeQuintiles(avg, spread) {
+  const zScores = [-1.28, -0.52, 0.0, 0.52, 1.28];
+  return zScores.map(z => Math.max(0.3, Math.min(15.5, +(avg + z * spread).toFixed(1))));
+}
+
+function computePctBad(avg, spread) {
+  const z = (CRITICAL_THRESHOLD - avg) / spread;
+  return Math.max(0.3, Math.min(70, +(normalCDF(z) * 100).toFixed(1)));
+}
+
+// Combined spread: quadrature of transit + DC + store variability
+function combinedSpread(tSpread, dcSpread, storeSpread) {
+  return Math.sqrt(tSpread**2 + dcSpread**2 + storeSpread**2);
+}
+
 let currentMode = 'fifo';
 let currentSupplier = 'all';
 
+// Core freshness calculation grounded in supply chain legs
 function getEffectiveData(regionName, supplierIdx) {
-  const base = REGION_BASE[regionName];
-  const sup = SUPPLIER_BASE[supplierIdx];
-  const adj = MODE_ADJUSTMENTS[currentMode];
-  const avg = Math.min(15, Math.max(1, base.avg + sup.avgBonus + adj.freshnessBonus));
-  const spread = base.spread;
-  const quintiles = computeQuintiles(avg, spread);
-  const pctBad = computePctBad(avg, spread);
-  const shrink = Math.min(25, Math.max(1, +(sup.shrinkBase * adj.shrinkMult + (REGION_BASE[regionName].spread - 2.8) * 0.4).toFixed(1)));
-  const instock = Math.min(99.5, Math.max(80, +(sup.instockBase + adj.instockBonus * 100 - (REGION_BASE[regionName].spread - 2.8) * 0.3).toFixed(1)));
-  return { avg, spread, quintiles, pctBad, shrink, instock };
+  const sc   = REGION_SC[regionName];
+  const sup  = SUPPLIER_BASE[supplierIdx];
+  const sd   = STORE_DAYS[currentMode];
+
+  const transitAvg  = sc.transit;
+  const dcAvg       = Math.max(0.5, DC_DWELL_AVG + sup.dcDwellAdj);
+  const storeAvg    = sd.avg;
+
+  // Days consumed before customer purchase
+  const consumed    = transitAvg + dcAvg + storeAvg;
+  const avg         = Math.max(0.5, Math.min(14.5, +(TOTAL_SHELF_LIFE - consumed).toFixed(1)));
+
+  // Spread combines variability from each leg
+  const spread      = +combinedSpread(sc.tSpread, DC_DWELL_SPREAD, sd.spread).toFixed(2);
+
+  const quintiles   = computeQuintiles(avg, spread);
+  const pctBad      = computePctBad(avg, spread);
+
+  // Shrink: driven by how much shelf life remains at store arrival,
+  // regional distance sensitivity, and rotation mode
+  const daysAtStore = Math.max(1, TOTAL_SHELF_LIFE - transitAvg - dcAvg);
+  const tightness   = Math.max(0, (storeAvg / daysAtStore)); // how much of store window is used
+  const shrinkRaw   = sup.shrinkBase * sc.shrinkSens * SHRINK_MODE_MULT[currentMode] * (1 + tightness * 0.4);
+  const shrink      = Math.min(28, Math.max(1.2, +shrinkRaw.toFixed(1)));
+
+  const instock     = Math.min(99, Math.max(80, +(sc.instockBase + sup.instockAdj - tightness * 2).toFixed(1)));
+
+  // Supply chain leg breakdown for waterfall display
+  const legs = { transit: transitAvg, dc: dcAvg, store: storeAvg, customer: avg };
+
+  return { avg, spread, quintiles, pctBad, shrink, instock, legs };
 }
 
 function getRegionAgg(regionName) {
   const suppliers = currentSupplier === 'all' ? [0,1,2] : [currentSupplier];
   const rows = suppliers.map(i => getEffectiveData(regionName, i));
-  const avg = rows.reduce((a,r) => a + r.avg, 0) / rows.length;
-  const spread = rows.reduce((a,r) => a + r.spread, 0) / rows.length;
+  const avg     = +(rows.reduce((a,r) => a+r.avg, 0) / rows.length).toFixed(1);
+  const spread  = +(rows.reduce((a,r) => a+r.spread, 0) / rows.length).toFixed(2);
+  const shrink  = +(rows.reduce((a,r) => a+r.shrink, 0) / rows.length).toFixed(1);
+  const instock = +(rows.reduce((a,r) => a+r.instock, 0) / rows.length).toFixed(1);
+  const pctBad  = +(rows.reduce((a,r) => a+r.pctBad, 0) / rows.length).toFixed(1);
   const quintiles = computeQuintiles(avg, spread);
-  const pctBad = computePctBad(avg, spread);
-  const shrink = rows.reduce((a,r) => a + r.shrink, 0) / rows.length;
-  const instock = rows.reduce((a,r) => a + r.instock, 0) / rows.length;
-  return { avg, spread, quintiles, pctBad, shrink, instock };
+  // Average legs
+  const legs = {
+    transit:  +(rows.reduce((a,r) => a+r.legs.transit, 0) / rows.length).toFixed(1),
+    dc:       +(rows.reduce((a,r) => a+r.legs.dc, 0) / rows.length).toFixed(1),
+    store:    +(rows.reduce((a,r) => a+r.legs.store, 0) / rows.length).toFixed(1),
+    customer: avg,
+  };
+  return { avg, spread, quintiles, pctBad, shrink, instock, legs };
 }
 
 function getSupplierAgg(supplierIdx) {
   const rows = REGIONS.map(r => getEffectiveData(r, supplierIdx));
-  const avg = rows.reduce((a,r) => a + r.avg, 0) / rows.length;
-  const spread = rows.reduce((a,r) => a + r.spread, 0) / rows.length;
-  const shrink = rows.reduce((a,r) => a + r.shrink, 0) / rows.length;
-  const instock = rows.reduce((a,r) => a + r.instock, 0) / rows.length;
-  const pctBad = rows.reduce((a,r) => a + r.pctBad, 0) / rows.length;
-  return { avg, spread, shrink, instock, pctBad };
+  return {
+    avg:     +(rows.reduce((a,r) => a+r.avg, 0) / rows.length).toFixed(1),
+    spread:  +(rows.reduce((a,r) => a+r.spread, 0) / rows.length).toFixed(2),
+    shrink:  +(rows.reduce((a,r) => a+r.shrink, 0) / rows.length).toFixed(1),
+    instock: +(rows.reduce((a,r) => a+r.instock, 0) / rows.length).toFixed(1),
+    pctBad:  +(rows.reduce((a,r) => a+r.pctBad, 0) / rows.length).toFixed(1),
+  };
 }
 
-function getFleetAvg() {
-  const allVals = REGIONS.map(r => getRegionAgg(r).avg);
-  return (allVals.reduce((a,b) => a+b,0)/allVals.length).toFixed(1);
+function getNetworkAvgFreshness() {
+  const vals = REGIONS.map(r => getRegionAgg(r).avg);
+  return (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1);
 }
 
 // ─── RENDER ────────────────────────────────────────────────────────────────────
 function renderKPIs() {
   const allRegions = REGIONS.map(r => getRegionAgg(r));
-  const fleetAvg = +(allRegions.reduce((a,r) => a+r.avg, 0) / allRegions.length).toFixed(1);
-  const worstPctBad = Math.max(...allRegions.map(r => r.pctBad));
-  const avgPctBad = +(allRegions.reduce((a,r) => a+r.pctBad, 0) / allRegions.length).toFixed(1);
-  const avgInstock = +(allRegions.reduce((a,r) => a+r.instock, 0) / allRegions.length).toFixed(1);
-  const avgShrink = +(allRegions.reduce((a,r) => a+r.shrink, 0) / allRegions.length).toFixed(1);
-  const bestRegion = allRegions.reduce((best, r, i) => r.avg > best.val ? {val:r.avg,name:REGIONS[i]} : best, {val:0,name:''});
-  const worstRegion = allRegions.reduce((worst, r, i) => r.avg < worst.val ? {val:r.avg,name:REGIONS[i]} : worst, {val:99,name:''});
+  const networkAvg  = +(allRegions.reduce((a,r) => a+r.avg, 0) / allRegions.length).toFixed(1);
+  const worstPctBad = +Math.max(...allRegions.map(r => r.pctBad)).toFixed(1);
+  const avgPctBad   = +(allRegions.reduce((a,r) => a+r.pctBad, 0) / allRegions.length).toFixed(1);
+  const avgInstock  = +(allRegions.reduce((a,r) => a+r.instock, 0) / allRegions.length).toFixed(1);
+  const avgShrink   = +(allRegions.reduce((a,r) => a+r.shrink, 0) / allRegions.length).toFixed(1);
+  const bestRegion  = allRegions.reduce((b,r,i) => r.avg > b.val ? {val:r.avg,name:REGIONS[i]} : b, {val:0,name:''});
+  const worstRegion = allRegions.reduce((w,r,i) => r.avg < w.val ? {val:r.avg,name:REGIONS[i]} : w, {val:99,name:''});
 
-  document.getElementById('fleet-avg').textContent = fleetAvg + 'd';
+  document.getElementById('fleet-avg').textContent = networkAvg + 'd';
 
-  const freshClass = fleetAvg >= 8 ? 'good' : fleetAvg >= 5 ? 'warn' : 'bad';
-  const pctClass = avgPctBad <= 10 ? 'good' : avgPctBad <= 20 ? 'warn' : 'bad';
-  const shrinkClass = avgShrink <= 6 ? 'good' : avgShrink <= 10 ? 'warn' : 'bad';
-  const instockClass = avgInstock >= 95 ? 'good' : avgInstock >= 90 ? 'warn' : 'bad';
+  const freshClass  = networkAvg >= 8 ? 'good' : networkAvg >= 5 ? 'warn' : 'bad';
+  const pctClass    = avgPctBad <= 10 ? 'good' : avgPctBad <= 20 ? 'warn' : 'bad';
+  const shrinkClass = avgShrink <= 6  ? 'good' : avgShrink <= 10 ? 'warn' : 'bad';
+  const instockClass= avgInstock >= 95? 'good' : avgInstock >= 90 ? 'warn' : 'bad';
 
   document.getElementById('kpi-strip').innerHTML = `
     <div class="kpi-card">
-      <div class="kpi-label">Avg Days Fresh</div>
-      <div class="kpi-value ${freshClass}">${fleetAvg}d</div>
-      <div class="kpi-sub">of 16d total shelf life</div>
-      <div class="kpi-delta ${fleetAvg/16*100 >= 50 ? 'up' : 'down'}">${(fleetAvg/16*100).toFixed(0)}% shelf life to customer</div>
+      <div class="kpi-label">Avg Customer Freshness at Purchase</div>
+      <div class="kpi-value ${freshClass}">${networkAvg}d</div>
+      <div class="kpi-sub">of 16d total shelf life from harvest</div>
+      <div class="kpi-delta ${networkAvg/16*100 >= 50 ? 'up' : 'down'}">${(networkAvg/16*100).toFixed(0)}% of shelf life delivered to customer</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Customers &lt;20% Shelf Life</div>
       <div class="kpi-value ${pctClass}">${avgPctBad}%</div>
       <div class="kpi-sub">received &lt;3.2 days remaining</div>
-      <div class="kpi-delta down">Worst region: ${worstPctBad.toFixed(1)}%</div>
+      <div class="kpi-delta down">Worst region: ${worstPctBad}%</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Avg In-Stock Rate</div>
@@ -785,8 +843,8 @@ function renderKPIs() {
     <div class="kpi-card">
       <div class="kpi-label">Regional Range</div>
       <div class="kpi-value blue">${worstRegion.val.toFixed(1)}–${bestRegion.val.toFixed(1)}d</div>
-      <div class="kpi-sub">min–max avg freshness</div>
-      <div class="kpi-delta down">Best: ${bestRegion.name}</div>
+      <div class="kpi-sub">min–max avg days fresh at purchase</div>
+      <div class="kpi-delta up">Best: ${bestRegion.name}</div>
     </div>
   `;
 }
@@ -934,11 +992,55 @@ function renderOpsGrid() {
   document.getElementById('ops-grid').innerHTML = html;
 }
 
+function renderWaterfall() {
+  const SL = TOTAL_SHELF_LIFE;
+  // Sort regions by transit distance (closest first)
+  const sorted = [...REGIONS].sort((a,b) => REGION_SC[a].transit - REGION_SC[b].transit);
+  let html = `<div style="display:flex;flex-direction:column;gap:8px;">`;
+
+  // Column headers
+  html += `<div style="display:grid;grid-template-columns:130px 1fr 52px 52px 52px 64px;gap:8px;align-items:center;padding-bottom:6px;border-bottom:1px solid var(--border);">
+    <div style="font-size:10px;font-weight:700;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em">Region</div>
+    <div style="font-size:10px;font-weight:700;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em">16-day shelf life breakdown</div>
+    <div style="font-size:10px;font-weight:700;color:#94A3B8;font-family:var(--font-mono);text-align:center;text-transform:uppercase;letter-spacing:.04em">Transit</div>
+    <div style="font-size:10px;font-weight:700;color:#93C5FD;font-family:var(--font-mono);text-align:center;text-transform:uppercase;letter-spacing:.04em">DC</div>
+    <div style="font-size:10px;font-weight:700;color:#B45309;font-family:var(--font-mono);text-align:center;text-transform:uppercase;letter-spacing:.04em">Store</div>
+    <div style="font-size:10px;font-weight:700;color:var(--green-fresh);font-family:var(--font-mono);text-align:center;text-transform:uppercase;letter-spacing:.04em">Cust. Days</div>
+  </div>`;
+
+  sorted.forEach(region => {
+    const d = getRegionAgg(region);
+    const L = d.legs;
+    const transitPct  = (L.transit  / SL) * 100;
+    const dcPct       = (L.dc       / SL) * 100;
+    const storePct    = (L.store    / SL) * 100;
+    const custPct     = (L.customer / SL) * 100;
+    const custClass   = L.customer >= 8 ? 'var(--green-fresh)' : L.customer >= 5 ? 'var(--amber)' : 'var(--red-warn)';
+
+    html += `<div style="display:grid;grid-template-columns:130px 1fr 52px 52px 52px 64px;gap:8px;align-items:center;">
+      <div style="font-size:12px;font-weight:600;color:var(--text-primary)">${region}</div>
+      <div style="display:flex;height:22px;border-radius:4px;overflow:hidden;background:#F1F5F9;">
+        <div style="width:${transitPct}%;background:#94A3B8;transition:width .5s ease;" title="Transit: ${L.transit}d"></div>
+        <div style="width:${dcPct}%;background:#93C5FD;transition:width .5s ease;" title="DC: ${L.dc}d"></div>
+        <div style="width:${storePct}%;background:#FCD34D;transition:width .5s ease;" title="Store: ${L.store}d"></div>
+        <div style="width:${custPct}%;background:${custClass};opacity:0.85;transition:width .5s ease;" title="Customer: ${L.customer}d"></div>
+      </div>
+      <div style="font-size:12px;font-weight:600;font-family:var(--font-mono);color:#64748B;text-align:center">${L.transit}d</div>
+      <div style="font-size:12px;font-weight:600;font-family:var(--font-mono);color:#3B82F6;text-align:center">${L.dc}d</div>
+      <div style="font-size:12px;font-weight:600;font-family:var(--font-mono);color:#B45309;text-align:center">${L.store}d</div>
+      <div style="font-size:13px;font-weight:800;font-family:var(--font-mono);color:${custClass};text-align:center">${L.customer}d</div>
+    </div>`;
+  });
+  html += `</div>`;
+  document.getElementById('waterfall-panel').innerHTML = html;
+}
+
 function renderAll() {
   renderKPIs();
   renderRegionFreshness();
   renderSuppliers();
   renderQuintileTable();
+  renderWaterfall();
   renderOpsGrid();
 }
 
