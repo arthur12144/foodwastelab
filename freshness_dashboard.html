@@ -750,7 +750,8 @@ function getEffectiveData(regionName, supplierIdx) {
   // Shrink derived from same normal distribution as pctBad — guarantees logical consistency
 // Under FIFO: customers absorb near-expiry units → shrink is ~35% of pctBad
 // Under LIFO: customers avoid near-expiry units → shrink converges toward or exceeds pctBad
-const shrinkRatios = { fifo: 0.35, '5050': 0.58, lifo: 0.92 };
+const daysAtStore = Math.max(1, TOTAL_SHELF_LIFE - transitAvg - dcAvg);  
+  const shrinkRatios = { fifo: 0.35, '5050': 0.58, lifo: 0.92 };
 const supShrinkAdj = [0.95, 1.25, 0.80][supplierIdx];
 const shrink = Math.min(20, Math.max(0.8, +(pctBad * shrinkRatios[currentMode] * supShrinkAdj).toFixed(1)));
   const tightness   = Math.max(0, (storeAvg / daysAtStore));
