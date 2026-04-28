@@ -705,10 +705,10 @@ function renderHero() {
 
   const diffEl = document.getElementById('hero-diff');
   if (diff > 0) {
-    diffEl.textContent = '+' + diff + 'pp above goal';
+    diffEl.textContent = '+' + diff + '% above goal';
     diffEl.className   = 'cfr-goal-diff ahead';
   } else if (diff < 0) {
-    diffEl.textContent = diff + 'pp below goal';
+    diffEl.textContent = diff + '% below goal';
     diffEl.className   = 'cfr-goal-diff behind';
   } else {
     diffEl.textContent = 'Exactly on goal';
@@ -721,7 +721,7 @@ function renderHero() {
     cfrVal>=goal ? 'var(--green-fresh)' : cfrVal>=goal-5 ? 'var(--amber)' : 'var(--red-warn)';
   document.getElementById('hero-bar-marker').style.left = goal + '%';
 
-  document.getElementById('insight-gap').textContent = diff < 0 ? (diff+'pp') : ('+'+diff+'pp');
+  document.getElementById('insight-gap').textContent = diff < 0 ? (diff+'%') : ('+'+diff+'%');
   document.getElementById('insight-gap').style.color = diff < 0 ? 'var(--red-warn)' : 'var(--green-fresh)';
 
   // Sub bucket defs
